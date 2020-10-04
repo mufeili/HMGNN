@@ -11,8 +11,8 @@ import pickle
 import argparse
 import numpy as np
 
-from tqdm import tqdm
 from Data import Molecule
+from joblib import Parallel, delayed, cpu_count
 
 def parse_id(filename):
     pos = filename.find('.xyz')
@@ -41,12 +41,11 @@ def load_badmoleculars(filename):
     return np.array(evilmols)
 
 def preprocess(DATADIR, indices, cut_r):
-    data = []
-    for idx in tqdm(indices):
-        filename = DATADIR + 'dsgdb9nsd_' + str(idx).zfill(6) + '.xyz'
-        mol = Molecule(filename, cut_r)
-        data.append(mol)
-    return data
+    n_jobs = cpu_count() - 1
+    filenames = [DATADIR + 'dsgdb9nsd_' + str(idx).zfill(6) + '.xyz' for idx in indices]
+
+    return Parallel(n_jobs=n_jobs, verbose=1)(
+        delayed(Molecule)(fname, cut_r) for fname in filenames)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
