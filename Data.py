@@ -9,7 +9,6 @@ Created on Thu Nov 14 15:43:02 2019
 import dgl
 import numpy as np
 from ase.units import Hartree, eV
-import math
 import torch
 from scipy.spatial import distance
 from scipy.sparse import csr_matrix
@@ -105,7 +104,7 @@ class Molecule(object):
             self.charge[i] = my_float(tp[4])
         
         # skip one line
-        tp = f.readline()
+        f.readline()
         
         # extract the smile representation
         tp = f.readline()
@@ -118,21 +117,19 @@ class Molecule(object):
         self._build_hetero_graph()
     
     def _build_hetero_graph(self):
-        ################################
-        # build the atom to atom graph #
-        ################################
+        ######################################
+        # prepare for the atom to atom graph #
+        ######################################
         self.dg_num_nodes = self.na
         self.dg_node_feat_discrete = torch.LongTensor(self.atoms)
         
         dist_graph_base = self.dist.copy()
         self.dg_edge_feat = torch.FloatTensor(dist_graph_base[dist_graph_base < self.cut_r]).unsqueeze(1)
         dist_graph_base[dist_graph_base >= self.cut_r] = 0.
-        
-        atom_graph = dgl.graph(csr_matrix(dist_graph_base), 'atom', 'a2a')
-        
-        ################################
-        # build the bond to bond graph #
-        ################################
+
+        ##################################
+        # prepare the bond to bond graph #
+        ##################################
         num_atoms = self.dist.shape[0]
         bond_feat_discrete = []
         bond_feat_continuous = []
@@ -152,27 +149,27 @@ class Molecule(object):
         self.lg_node_feat_discrete = torch.LongTensor(bond_feat_discrete)
         self.lg_node_feat_continuous = torch.FloatTensor(bond_feat_continuous)
         
-        #######################################################
-        # build the atom to bond graph and bond to atom graph #
-        #######################################################
+        #########################################################
+        # prepare the atom to bond graph and bond to atom graph #
+        #########################################################
         assignment = np.zeros((num_atoms, num_bonds), dtype=np.int64)
         for i, idx in enumerate(indices):
             assignment[idx[0], i] = 1
             assignment[idx[1], i] = 1
-        
-        bipartite_graph_base = csr_matrix(assignment)
-        atom2bond_graph = dgl.bipartite(bipartite_graph_base, 'atom', 'a2b', 'bond')
-        bond2atom_graph = dgl.bipartite(bipartite_graph_base.transpose(), 'bond', 'b2a', 'atom')
-        
-        ################################
-        # build the bond to bond graph #
-        ################################
+        assign_row, assign_col = assignment.nonzero()
+
+        ##################################
+        # prepare the bond to bond graph #
+        ##################################
         bond_graph_base = assignment.T @ assignment
         np.fill_diagonal(bond_graph_base, 0) # eliminate self connections
-        bond_graph = dgl.graph(csr_matrix(bond_graph_base), 'bond', 'b2b')
-        
-        self.hetero_graph = dgl.hetero_from_relations([atom_graph, atom2bond_graph, bond2atom_graph, bond_graph])
-        
+
+        self.hetero_graph = dgl.heterograph({('atom', 'a2a', 'atom'): dist_graph_base.nonzero(),
+                                             ('atom', 'a2b', 'bond'): (assign_row, assign_col),
+                                             ('bond', 'b2a', 'atom'): (assign_col, assign_row),
+                                             ('bond', 'b2b', 'bond'): bond_graph_base.nonzero()},
+                                            num_nodes_dict={'atom': num_atoms, 'bond': num_bonds})
+
         ##############################################
         # build edge feature for the bond2bond graph #
         ##############################################
