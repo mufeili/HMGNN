@@ -16,7 +16,6 @@ import torch.nn.functional as F
 
 from Model import HMGNN
 from Model.torch_layers import shifted_softplus
-from Data import Molecule
 from DataLoader import DataLoader
 from Util import load_model_state, save_model_state, evaluate, evaluate_gap, lr_scheduler, post_op_process
 
@@ -144,7 +143,7 @@ def trainIter(model,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='data_0',
+    parser.add_argument('--data_dir', type=str, default='Data/data_0',
                         help='directory to the data.')
     parser.add_argument('--prpty', type=str, default='U0',
                         help='the property to be trained on.')
