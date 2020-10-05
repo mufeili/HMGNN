@@ -54,7 +54,8 @@ def evaluate(model, data, prpty, batch_size = 32, return_attn = False):
         
         for i in range(n_batch):
             batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y = data.next_batch(batch_size, prpty)
-            
+
+            batch_hg = batch_hg.to(device)
             dg_node_feat_discrete = dg_node_feat_discrete.to(device)
             lg_node_feat_continuous = lg_node_feat_continuous.to(device)
             lg_node_feat_discrete = lg_node_feat_discrete.to(device)
@@ -91,7 +92,8 @@ def evaluate_gap(model_homo, model_lumo, data, batch_size = 32):
         
         for i in range(n_batch):
             batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y = data.next_batch(batch_size, 'gap')
-            
+
+            batch_hg = batch_hg.to(device)
             dg_node_feat_discrete = dg_node_feat_discrete.to(device)
             lg_node_feat_continuous = lg_node_feat_continuous.to(device)
             lg_node_feat_discrete = lg_node_feat_discrete.to(device)
