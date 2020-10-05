@@ -13,13 +13,16 @@ import torch.nn.functional as F
 
 import numpy as np
 
-import dgl
-import dgl.backend as bknd
-
 from .dgl_layers import HoConv
-from .torch_layers import ResLayer, DenseLayer, DistRBF, AngleRBF, ShrinkDistRBF, GlorotOrthogonal
+from .torch_layers import DenseLayer, DistRBF, AngleRBF, ShrinkDistRBF, GlorotOrthogonal
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def unsorted_1d_segment_sum(input, seg_id, n_segs, dim):
+    y = torch.zeros(n_segs, *input.shape[1:]).to(input)
+    seg_id = seg_id.view((-1,) + (1,) * (input.dim() - 1)).expand_as(input)
+    y = y.scatter_add_(dim, seg_id, input)
+    return y
 
 def sum_hetero_nodes(bg, node_type, feats):
     batch_size = bg.batch_size
@@ -28,7 +31,7 @@ def sum_hetero_nodes(bg, node_type, feats):
     seg_id = torch.from_numpy(np.arange(batch_size, dtype='int64').repeat(batch_num_nodes))
     seg_id = seg_id.to(feats.device)
 
-    return bknd.unsorted_1d_segment_sum(feats, seg_id, batch_size, 0)
+    return unsorted_1d_segment_sum(feats, seg_id, batch_size, 0)
 
 class DistGraphInputModule(nn.Module):
     def __init__(self, node_type_universe, edge_continuous_dim, hidden_dim, cut_r, activation):
