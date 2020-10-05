@@ -23,7 +23,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def sum_hetero_nodes(bg, node_type, feats):
     batch_size = bg.batch_size
-    batch_num_nodes = bg.batch_num_nodes(node_type)
+    batch_num_nodes = bg.batch_num_nodes(node_type).cpu()
 
     seg_id = torch.from_numpy(np.arange(batch_size, dtype='int64').repeat(batch_num_nodes))
     seg_id = seg_id.to(feats.device)
