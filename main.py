@@ -144,7 +144,7 @@ def trainIter(model,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='Data/N_50000_cut_5_seed_1/',
+    parser.add_argument('--data_dir', type=str, default='data_0',
                         help='directory to the data.')
     parser.add_argument('--prpty', type=str, default='U0',
                         help='the property to be trained on.')
@@ -172,7 +172,7 @@ if __name__ == '__main__':
                         help="learning rate decreasing rate.")
     parser.add_argument("--decrease_steps", type=int, default=2000000,
                         help="steps to decrease the learning rate.")
-    parser.add_argument('--weight_decay', type=float, default=0.,
+    parser.add_argument('--weight_decay', type=float, default=1e-6,
                         help="weight decay")
     parser.add_argument('--cut_r', type=float, default=5.,
                         help="cut radius to build graphs")
