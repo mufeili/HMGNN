@@ -22,12 +22,14 @@ from Util import load_model_state, save_model_state, evaluate, evaluate_gap, lr_
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def train(batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y, model, optimizer):
+def train(batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete,
+          dg_edge_feat, lg_edge_feat, y, model, optimizer):
     model.train()
     batch_size = batch_hg.batch_size
     
     optimizer.zero_grad()
-    dg_y_hat, lg_y_hat, y_hat, _ = model(batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat)
+    dg_y_hat, lg_y_hat, y_hat, _ = model(batch_hg, dg_node_feat_discrete, lg_node_feat_continuous,
+                                         lg_node_feat_discrete, dg_edge_feat, lg_edge_feat)
     
     dg_loss = F.l1_loss(dg_y_hat.squeeze(), y, reduction='sum')
     lg_loss = F.l1_loss(lg_y_hat.squeeze(), y, reduction='sum')
@@ -47,10 +49,8 @@ def trainIter(model,
               trn_param, 
               prpty, 
               model_dir, 
-              train_data, 
-              val_data=None, 
-              tst_data=None, 
-              batch_size = 32, 
+              val_data=None,
+              batch_size = 32,
               total_steps = 3000000,
               save_steps = 5000,
               eval_steps = 5000,
@@ -62,11 +62,14 @@ def trainIter(model,
     best_iter = trn_param['best_iter']
     iteration = trn_param['iteration']
     log = trn_param['log']
-    start = time.time()
-    
+    dur = []
+    dur_val = []
+
     dist_graph_loss, line_graph_loss, combined_loss = 0., 0., 0.
     for it in range(iteration + 1, total_steps + 1):
-        batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y = trn_data.next_random_batch(batch_size, prpty)
+        t0 = time.time()
+        batch_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y = \
+            trn_data.next_random_batch(batch_size, prpty)
         
         cuda_hg = batch_hg.to(device)
         dg_node_feat_discrete = dg_node_feat_discrete.to(device)
@@ -77,25 +80,30 @@ def trainIter(model,
         
         y = y.to(device)
         
-        dg_loss, lg_loss, cb_loss = train(cuda_hg, dg_node_feat_discrete, lg_node_feat_continuous, lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y, model, optimizer)
+        dg_loss, lg_loss, cb_loss = train(cuda_hg, dg_node_feat_discrete, lg_node_feat_continuous,
+                                          lg_node_feat_discrete, dg_edge_feat, lg_edge_feat, y, model, optimizer)
         
         dist_graph_loss += dg_loss
         line_graph_loss += lg_loss
         combined_loss += cb_loss
-        
-        end = time.time()
+
+        t1 = time.time()
+        dur.append(t1 - t0)
         
         if it % eval_steps == 0:
             dg_val_mae, lg_val_mae, cb_val_mae, _ = evaluate(model, val_data, prpty, 128, False)
-            end_val = time.time()
-            
+            dur_val.append(time.time() - t1)
+
+            mean_dur = np.mean(dur)
+            mean_dur_val = np.mean(dur_val)
+
             print('-----------------------------------------------------------------------')
-            print('Steps: %d / %d, time: %.4f, val_time: %.4f.' % (it, total_steps, end - start, end_val - end))
+            print('Steps: %d / %d, time: %.4f, val_time: %.4f.' % (it, total_steps, mean_dur, mean_dur_val))
             print('Dist graph loss: %.6f, line graph loss: %.6f, combined loss: %.6f.' % (dist_graph_loss / (eval_steps * batch_size), line_graph_loss / (eval_steps * batch_size), combined_loss / (eval_steps * batch_size)))
             print('Val: Dist graph MAE: %.6f, line graph MAE: %.6f, combined MAE: %.6f.' % (dg_val_mae, lg_val_mae, cb_val_mae))
             
             log += '-----------------------------------------------------------------------\n'
-            log += 'Steps: %d / %d, time: %.4f, val_time: %.4f. \n' % (it, total_steps, end - start, end_val - end)
+            log += 'Steps: %d / %d, time: %.4f, val_time: %.4f. \n' % (it, total_steps, mean_dur, mean_dur_val)
             log += 'Dist graph loss: %.6f, line graph loss: %.6f, combined loss: %.6f. \n' % (dist_graph_loss / (eval_steps * batch_size), line_graph_loss / (eval_steps * batch_size), combined_loss / (eval_steps * batch_size))
             log += 'Val: Dist graph MAE: %.6f, line graph MAE: %.6f, combined MAE: %.6f. \n' % (dg_val_mae, lg_val_mae, cb_val_mae)
             
@@ -219,7 +227,6 @@ if __name__ == '__main__':
                                         trn_param,
                                         prpty = args.prpty,
                                         model_dir = args.model_dir,
-                                        train_data = trn_data,
                                         val_data = val_data,
                                         batch_size = args.batch_size,
                                         decrease_steps = args.decrease_steps,
@@ -233,15 +240,21 @@ if __name__ == '__main__':
         trn_data = DataLoader(os.path.join(args.data_dir, 'train.data'))
         if args.prpty != 'gap':
             model = torch.load(os.path.join(args.model_dir, 'Best_model.pt')).to(device)
-            train_mae_1, train_mae_2, train_mae_all, train_attn = evaluate(model, trn_data, args.prpty, batch_size = args.batch_size, return_attn = args.return_attn)
-            test_mae_1, test_mae_2, test_mae_all, test_attn = evaluate(model, tst_data, args.prpty, batch_size = args.batch_size, return_attn = args.return_attn)
+            train_mae_1, train_mae_2, train_mae_all, train_attn = evaluate(model, trn_data, args.prpty,
+                                                                           batch_size = args.batch_size,
+                                                                           return_attn = args.return_attn)
+            test_mae_1, test_mae_2, test_mae_all, test_attn = evaluate(model, tst_data, args.prpty,
+                                                                       batch_size = args.batch_size,
+                                                                       return_attn = args.return_attn)
             if args.return_attn:
                 np.save(os.path.join(args.model_dir, 'train_attn_score_%s.npy' % (args.prpty)), train_attn)
                 np.save(os.path.join(args.model_dir, 'test_attn_score_%s.npy' % (args.prpty)), test_attn)
         else:
             model_homo = torch.load(os.path.join(args.model_dir, 'Best_homo_model.pt')).to(device)
             model_lumo = torch.load(os.path.join(args.model_dir, 'Best_lumo_model.pt')).to(device)
-            train_mae_1, train_mae_2, train_mae_all = evaluate_gap(model_homo, model_lumo, trn_data, batch_size = args.batch_size)
-            test_mae_1, test_mae_2, test_mae_all = evaluate_gap(model_homo, model_lumo, tst_data, batch_size = args.batch_size)
+            train_mae_1, train_mae_2, train_mae_all = evaluate_gap(
+                model_homo, model_lumo, trn_data, batch_size = args.batch_size)
+            test_mae_1, test_mae_2, test_mae_all = evaluate_gap(
+                model_homo, model_lumo, tst_data, batch_size = args.batch_size)
         print('Train: One body MAE: %.6f, two body MAE: %.6f, combined MAE: %.6f.' % (train_mae_1, train_mae_2, train_mae_all))
         print('Test: One body MAE: %.6f, two body MAE: %.6f, combined MAE: %.6f.' % (test_mae_1, test_mae_2, test_mae_all))

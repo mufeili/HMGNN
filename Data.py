@@ -11,7 +11,6 @@ import numpy as np
 from ase.units import Hartree, eV
 import torch
 from scipy.spatial import distance
-from scipy.sparse import csr_matrix
 
 attr_index = ['A', 'B', 'C', 'mu', 'alpha', 'homo', 'lumo', 'gap', 'r2', 'zpve', 'U0', 'U', 'H', 'G', 'Cv']
 atom_index = {'H':0, 'C':1, 'N':2, 'O':3, 'F':4}
@@ -70,47 +69,39 @@ class Molecule(object):
                     cut_r: cut off distance
         '''
         self.cut_r = cut_r
+        self.nattr = len(attr_index)
         
         # read in basic information
-        f = open(filename)
-        self.nattr = len(attr_index)
-        self.na = int(f.readline()) # number of atoms
+        with open(filename, 'r') as f:
+            self.na = int(f.readline()) # number of atoms
+            properties = f.readline().split() # list of properties
+            self.id = int(properties[1])
+            self.properties = dict()
         
-        properties = f.readline().split() # list of properties
-        self.id = int(properties[1])
-        self.properties = dict()
+            self.atoms = np.zeros(self.na, dtype=np.int64)
+            self.coordinates = np.zeros((self.na, 3), dtype=np.float32)
+            self.charge = np.zeros(self.na, dtype=np.float32)
         
-        self.atoms = np.zeros(self.na, dtype=np.int64)
-        self.coordinates = np.zeros((self.na, 3), dtype=np.float32)
-        self.charge = np.zeros(self.na, dtype=np.float32)
+            for i in range(self.nattr):
+                self.properties[attr_index[i]] = float(properties[i + 2])
         
-        for i in range(self.nattr):
-            self.properties[attr_index[i]] = float(properties[i + 2])
-        
-        # convert Hartree to eV
-        self.properties['homo'] *= Hartree / eV
-        self.properties['lumo'] *= Hartree / eV
-        self.properties['gap'] *= Hartree / eV
-        self.properties['zpve'] *= Hartree / eV
-        self.properties['U0'] *= Hartree / eV
-        self.properties['U'] *= Hartree / eV
-        self.properties['H'] *= Hartree / eV
-        self.properties['G'] *= Hartree / eV
+            # convert Hartree to eV
+            for attr in ['homo', 'lumo', 'gap', 'zpve', 'U0', 'U', 'H', 'G']:
+                self.properties[attr] *= Hartree / eV
 
-        for i in range(self.na):
-            tp = f.readline().split()
-            self.atoms[i] = atom_index[tp[0]]
-            self.coordinates[i, :] = [my_float(tp[j]) for j in range(1, 4)]
-            self.charge[i] = my_float(tp[4])
+            for i in range(self.na):
+                tp = f.readline().split()
+                self.atoms[i] = atom_index[tp[0]]
+                self.coordinates[i, :] = [my_float(tp[j]) for j in range(1, 4)]
+                self.charge[i] = my_float(tp[4])
         
-        # skip one line
-        f.readline()
+            # skip one line
+            f.readline()
         
-        # extract the smile representation
-        tp = f.readline()
-        self.smile = tp[:tp.find('\t')]
-        f.close()
-        
+            # extract the smile representation
+            tp = f.readline()
+            self.smile = tp[:tp.find('\t')]
+
         self.dist = distance.cdist(self.coordinates, self.coordinates, 'euclidean')
         np.fill_diagonal(self.dist, np.inf)
         
@@ -181,7 +172,7 @@ class Molecule(object):
             body1 = indices[x[i]]
             body2 = indices[y[i]]
             
-            bodyxor, link = setxor(body1, body2)
+            bodyxor, _ = setxor(body1, body2)
             
             a = self.dist[body1[0], body1[1]]
             b = self.dist[body2[0], body2[1]]

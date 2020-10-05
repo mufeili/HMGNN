@@ -115,7 +115,7 @@ class DataLoader(object):
         return self._generate_batch(indices, prpty)
     
     def _generate_batch(self, indices, prpty):
-        batch_g = dgl.batch_hetero([self.data[i].get_hetero_graph() for i in indices])
+        batch_g = dgl.batch([self.data[i].get_hetero_graph() for i in indices])
         
         dg_node_feat_discrete = torch.cat([self.data[i].get_dg_node_feat_discrete() for i in indices], dim=0)
         lg_node_feat_continuous = torch.cat([self.data[i].get_lg_node_feat_continuous() for i in indices], dim=0)
